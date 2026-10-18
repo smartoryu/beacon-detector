@@ -134,7 +134,7 @@ so Pages **preview** deployments also work.
 - [x] Add `.github/workflows/ci.yml` and `wrangler.toml`.
 - [x] Write `docs/deploy-cloudflare-pages.md`, `docs/deploy-cloudflare-tunnel.md`, `docs/runbook-bridge-macos.md`.
 - [x] Update `README.md` with the Deploy section.
-- [ ] Create `smartoryu/beacon-detector` on GitHub and push; let CI run green.
+- [x] Create `smartoryu/beacon-detector` on GitHub and push; let CI run green.
 - [ ] Connect the repo in Cloudflare Pages (build `pnpm build`, output `dist`).
 - [ ] On the Mac: run `pnpm bridge`, start the quick tunnel, paste URL + token into the deployed app, verify.
 
