@@ -1,0 +1,31 @@
+@import 'tailwindcss';
+
+@theme {
+  /* Newly found beacons flash once (see BeaconCard). */
+  --animate-flash: flash 1.5s ease-out 1;
+
+  @keyframes flash {
+    0% {
+      background-color: --alpha(var(--color-sky-400) / 45%);
+      box-shadow: 0 0 0 2px var(--color-sky-400);
+    }
+    100% {
+      background-color: transparent;
+      box-shadow: 0 0 0 2px transparent;
+    }
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-slate-950);
+  color: var(--color-slate-200);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}

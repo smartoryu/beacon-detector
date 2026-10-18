@@ -1,0 +1,22 @@
+{
+  "name": "beacon-detector-bridge",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Local BLE bridge for Beacon Detector: noble adapter state + iBeacon sightings over WebSocket.",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@stoprocent/noble": "^2.8.0",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/ws": "^8.18.0",
+    "tsx": "^4.20.0",
+    "typescript": "~6.0.2"
+  }
+}
