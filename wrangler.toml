@@ -1,0 +1,11 @@
+# Cloudflare Pages configuration.
+#
+# The project is connected to the GitHub repo via the Pages "Git integration":
+#   Build command:      pnpm build
+#   Build output dir:   dist
+#   Node version env:   NODE_VERSION=22
+#
+# `pages_build_output_dir` keeps local `wrangler pages` runs in sync with that.
+
+name = "beacon-detector"
+pages_build_output_dir = "dist"

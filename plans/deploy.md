@@ -126,14 +126,14 @@ so Pages **preview** deployments also work.
 
 ## Steps
 
-- [ ] Bootstrap the repo: `git init -b main`, extend `.gitignore`, `.node-version`, initial commit.
-- [ ] Add bridge auth + origin allowlist + configurable bind in `server/src/index.ts`; add `server/.env.example`.
-- [ ] Add runtime bridge URL/token resolution in `src/lib/transports/bridge.ts` + `src/types.ts`.
-- [ ] Add `src/lib/bridgeSettings.ts`, `src/components/BridgeSettings.tsx`, wire into `App.tsx`, add `vite-env.d.ts`.
-- [ ] Add root `bridge` / `tunnel` scripts and `engines`.
-- [ ] Add `.github/workflows/ci.yml` and `wrangler.toml`.
-- [ ] Write `docs/deploy-cloudflare-pages.md`, `docs/deploy-cloudflare-tunnel.md`, `docs/runbook-bridge-macos.md`.
-- [ ] Update `README.md` with the Deploy section.
+- [x] Bootstrap the repo: `git init -b main`, extend `.gitignore`, `.node-version`, initial commit.
+- [x] Add bridge auth + origin allowlist + configurable bind in `server/src/index.ts`; add `server/.env.example`.
+- [x] Add runtime bridge URL/token resolution in `src/lib/transports/bridge.ts` + `src/types.ts`.
+- [x] Add `src/lib/bridgeSettings.ts`, `src/components/BridgeSettings.tsx`, wire into `App.tsx`, add `vite-env.d.ts`.
+- [x] Add root `bridge` / `tunnel` scripts and `engines`.
+- [x] Add `.github/workflows/ci.yml` and `wrangler.toml`.
+- [x] Write `docs/deploy-cloudflare-pages.md`, `docs/deploy-cloudflare-tunnel.md`, `docs/runbook-bridge-macos.md`.
+- [x] Update `README.md` with the Deploy section.
 - [ ] Create `smartoryu/beacon-detector` on GitHub and push; let CI run green.
 - [ ] Connect the repo in Cloudflare Pages (build `pnpm build`, output `dist`).
 - [ ] On the Mac: run `pnpm bridge`, start the quick tunnel, paste URL + token into the deployed app, verify.

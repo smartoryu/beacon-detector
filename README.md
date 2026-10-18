@@ -89,9 +89,11 @@ Both transports normalize into one status enum:
 | `pnpm dev` | Vite dev server (browser transport only) |
 | `pnpm dev:server` | Node BLE bridge with watch mode |
 | `pnpm dev:all` | Both, via `scripts/dev.mjs` |
+| `pnpm bridge` | Node BLE bridge, no watch (use when exposing it) |
+| `pnpm tunnel` | Cloudflare quick tunnel → `http://127.0.0.1:8787` |
 | `pnpm build` | Type-check + production build to `dist/` |
 | `pnpm preview` | Serve the build (bridge proxying preserved) |
-| `pnpm test` | Vitest unit tests (parser, RSSI, sort, export, store) |
+| `pnpm test` | Vitest unit tests (parser, RSSI, sort, export, store, bridge URL) |
 | `pnpm typecheck` | `tsc -b` for the web app and the bridge |
 | `pnpm lint` | oxlint |
 
@@ -108,6 +110,7 @@ src/
     export.ts                  JSON/CSV serialisation + download
     sort.ts                    Beacon sorting
     store.ts                   Per-transport localStorage persistence
+    bridgeSettings.ts          Runtime bridge URL/token (localStorage + env defaults)
     transports/
       types.ts                 BleTransport contract + tiny emitter
       webBluetooth.ts          requestLEScan implementation
@@ -115,10 +118,14 @@ src/
   hooks/
     useBeaconScanner.ts        subscribe/merge/dedup, scan lifecycle, persistence
     useNow.ts                  ticking clock for "last seen"
-  components/                  Banner, switch, toolbar, list, card, empty state
+  components/                  Banner, switch, bridge settings, toolbar, list, card, empty state
+  vite-env.d.ts                VITE_BRIDGE_URL / VITE_BRIDGE_TOKEN typings
 server/
-  src/index.ts                 noble + ws bridge
+  src/index.ts                 noble + ws bridge (auth + origin allowlist)
+docs/                          Deploy guides and the macOS bridge runbook
 scripts/dev.mjs                run Vite and the bridge together
+.github/workflows/ci.yml       lint → typecheck → test → build
+wrangler.toml                  Cloudflare Pages build output
 ```
 
 ### iBeacon wire format
@@ -129,23 +136,45 @@ included) and the Web Bluetooth shape (payload only) by locating the `4C 00 02 1
 
 ### Bridge protocol
 
-JSON over `ws://127.0.0.1:8787/ble-ws` (proxied by Vite at `/ble-ws`):
+JSON over `ws://127.0.0.1:8787/ble-ws` (proxied by Vite at `/ble-ws` in dev, or reached directly as
+`wss://<tunnel-host>/ble-ws` in production):
 
 ```
-server → client  {type:'hello',version}
+server → client  {type:'hello',version,authRequired}
                  {type:'status',state,scanning}
                  {type:'beacon',payload:{sourceId,rssi,localName?,address?,addressType?,manufacturerData:number[]}}
-client → server  {type:'start'} | {type:'stop'} | {type:'ping'}
+client → server  {type:'auth',token}      # first frame when authRequired
+                 {type:'start'} | {type:'stop'} | {type:'ping'}
 ```
 
-`GET /health` returns the same status payload for quick checks. The client re-parses the raw bytes with its
-own `parseIBeacon()`, so both transports decode identically.
+`GET /health` returns `{ ok: true, version }`. A bad token closes the socket with code `4401`. The client
+re-parses the raw bytes with its own `parseIBeacon()`, so both transports decode identically.
+
+---
+
+## Deploy
+
+**App** → Cloudflare Pages (free `*.pages.dev`), built by the Pages Git integration.
+**Bridge** → stays on the Mac that has the Bluetooth radio, exposed with a Cloudflare Tunnel (`wss://`).
+GitHub Actions runs CI only.
+
+| Guide | Covers |
+| :-- | :-- |
+| [`docs/deploy-cloudflare-pages.md`](docs/deploy-cloudflare-pages.md) | Pages project, build settings, verification |
+| [`docs/deploy-cloudflare-tunnel.md`](docs/deploy-cloudflare-tunnel.md) | Quick tunnel + named-tunnel upgrade |
+| [`docs/runbook-bridge-macos.md`](docs/runbook-bridge-macos.md) | Run the bridge, TCC permission, token rotation |
+
+Why the bridge is not “deployed” to a cloud host: it needs a physical BLE radio within ~10–30 m of the
+beacons. Because a quick-tunnel URL changes on every restart, the app takes the bridge URL **and token at
+runtime** via the **Bridge settings** panel (persisted in `localStorage`), not at build time.
 
 ---
 
 ## Known limitations
 
 - Web Bluetooth scanning is experimental and Chrome/Edge-only, and needs a visible tab.
-- `@stoprocent/noble` is a native module: Node ≥ 18 required (built and tested on Node 22).
+- `@stoprocent/noble` is a native module: Node ≥ 22 required (built and tested on Node 22).
+- A Cloudflare **quick tunnel** URL changes on every restart — re-paste it in **Bridge settings**.
+- The bridge is internet-exposed when tunneled; set `BRIDGE_AUTH_TOKEN` and `BRIDGE_ALLOWED_ORIGINS`.
 - iBeacon advertisements are anonymous — the app cannot identify their owner.
 - Two different beacons with the same `uuid:major:minor` intentionally collapse into one row.

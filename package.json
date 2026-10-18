@@ -3,10 +3,15 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "vite",
     "dev:server": "pnpm --dir server dev",
     "dev:all": "node scripts/dev.mjs",
+    "bridge": "pnpm --dir server start",
+    "tunnel": "cloudflared tunnel --url http://127.0.0.1:8787",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -31,5 +36,6 @@
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
     "vitest": "^5.0.5"
-  }
+  },
+  "packageManager": "pnpm@12.9.1"
 }
