@@ -25,6 +25,8 @@ export interface BleTransport {
   onBeacon(listener: (beacon: RawBeaconEvent) => void): () => void
   start(): Promise<void>
   stop(): Promise<void>
+  /** Re-establish the connection after settings change (bridge only). */
+  reconnect?(): Promise<void>
   dispose(): void
 }
 

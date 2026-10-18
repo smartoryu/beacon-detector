@@ -111,6 +111,8 @@ export interface BridgeBeaconMessage {
 export interface BridgeHelloMessage {
   type: 'hello'
   version: number
+  /** True when the bridge requires an `auth` frame before anything else. */
+  authRequired: boolean
 }
 
 export type BridgeServerMessage =
@@ -119,6 +121,7 @@ export type BridgeServerMessage =
   | BridgeHelloMessage
 
 export type BridgeClientMessage =
+  | { type: 'auth'; token: string }
   | { type: 'start' }
   | { type: 'stop' }
   | { type: 'ping' }

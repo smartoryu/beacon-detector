@@ -4,6 +4,7 @@ import type {
   BridgeServerMessage,
   RawBeaconEvent,
 } from '../../types'
+import { loadBridgeSettings, resolveBridgeUrl } from '../bridgeSettings'
 import { parseIBeacon } from '../ibeacon'
 import { createEmitter, type BleTransport, type TransportStatus } from './types'
 
@@ -11,15 +12,15 @@ const PROBE_TIMEOUT_MS = 900
 const RECONNECT_BASE_MS = 1000
 const RECONNECT_MAX_MS = 10_000
 
-/** Websocket endpoint, proxied by Vite (`/ble-ws` → 127.0.0.1:8787). */
-function bridgeUrl(): string {
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${location.host}/ble-ws`
-}
+/** WebSocket close code used by the bridge for a failed/invalid auth frame. */
+const CLOSE_UNAUTHORIZED = 4401
 
 const OFF_MESSAGE = 'Bluetooth is turned off.'
 const UNAUTHORIZED_MESSAGE =
   'Bluetooth permission was denied for the Node process. Allow it in System Settings → Privacy & Security → Bluetooth, then restart the bridge.'
+const BAD_TOKEN_MESSAGE =
+  'The bridge rejected the token. Update it in Bridge settings and try again.'
+const OFFLINE_MESSAGE = 'The Node bridge is not connected.'
 
 /** Map a raw noble adapter state to the normalized banner status. */
 function mapAdapterState(
@@ -53,7 +54,9 @@ function mapAdapterState(
  * Node bridge transport: talks to `server/` over WebSocket.
  *
  * Keeps one socket alive, reconnects with capped exponential backoff, and
- * re-issues the last requested scan intent on reconnect.
+ * re-issues the last requested scan intent after the auth handshake. The
+ * endpoint and token are read from {@link loadBridgeSettings} on every connect,
+ * because a Cloudflare quick-tunnel URL changes on each restart.
  */
 export function createBridgeTransport(): BleTransport {
   const statusEmitter = createEmitter<TransportStatus>()
@@ -64,11 +67,14 @@ export function createBridgeTransport(): BleTransport {
   let reconnectTimer: number | null = null
   let reconnectDelay = RECONNECT_BASE_MS
   let wantScanning = false
+  let startRequested = false
+  let authed = false
+  let authToken = ''
   let disposed = false
   let last: TransportStatus = {
     status: 'off',
     scanning: false,
-    message: 'The Node bridge is not connected.',
+    message: OFFLINE_MESSAGE,
   }
 
   const setStatus = (next: TransportStatus) => {
@@ -82,6 +88,12 @@ export function createBridgeTransport(): BleTransport {
     }
   }
 
+  const maybeStart = () => {
+    if (!authed || !wantScanning || startRequested) return
+    startRequested = true
+    send({ type: 'start' })
+  }
+
   const handleMessage = (event: MessageEvent<string>) => {
     let message: BridgeServerMessage
     try {
@@ -90,7 +102,22 @@ export function createBridgeTransport(): BleTransport {
       return
     }
 
+    if (message.type === 'hello') {
+      if (message.authRequired) {
+        send({ type: 'auth', token: authToken })
+      } else {
+        authed = true
+        maybeStart()
+      }
+      return
+    }
+
     if (message.type === 'status') {
+      // The server only sends status after a successful handshake.
+      if (!authed) {
+        authed = true
+        maybeStart()
+      }
       setStatus(mapAdapterState(message.state, message.scanning))
       return
     }
@@ -125,10 +152,29 @@ export function createBridgeTransport(): BleTransport {
     reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS)
   }
 
-  /** Open a socket (shared by `probe()` and `start()`). Resolves on open. */
+  const teardownSocket = () => {
+    if (!socket) return
+    socket.onclose = null
+    socket.onerror = null
+    socket.onmessage = null
+    socket.onopen = null
+    try {
+      socket.close()
+    } catch {
+      /* already closed */
+    }
+    socket = null
+  }
+
+  /** Open a socket (shared by `probe()`, `start()` and `reconnect()`). */
   const connect = (): Promise<boolean> => {
     if (socket && socket.readyState === WebSocket.OPEN) return Promise.resolve(true)
     if (connecting) return connecting
+
+    const settings = loadBridgeSettings()
+    authToken = settings.token
+    authed = false
+    startRequested = false
 
     connecting = new Promise<boolean>((resolve) => {
       let settled = false
@@ -139,13 +185,12 @@ export function createBridgeTransport(): BleTransport {
       }
 
       try {
-        const ws = new WebSocket(bridgeUrl())
+        const ws = new WebSocket(resolveBridgeUrl(settings))
         socket = ws
 
         ws.onopen = () => {
           reconnectDelay = RECONNECT_BASE_MS
           setStatus({ status: 'idle', scanning: wantScanning })
-          if (wantScanning) send({ type: 'start' })
           done(true)
         }
 
@@ -155,14 +200,23 @@ export function createBridgeTransport(): BleTransport {
           done(false)
         }
 
-        ws.onclose = () => {
+        ws.onclose = (event) => {
           if (socket === ws) socket = null
-          setStatus({
-            status: 'off',
-            scanning: false,
-            message: 'The Node bridge is not connected.',
-          })
+          authed = false
+          startRequested = false
           done(false)
+
+          if (event.code === CLOSE_UNAUTHORIZED) {
+            // A wrong token is not transient — don't loop on reconnect.
+            setStatus({
+              status: 'unauthorized',
+              scanning: false,
+              message: BAD_TOKEN_MESSAGE,
+            })
+            return
+          }
+
+          setStatus({ status: 'off', scanning: false, message: OFFLINE_MESSAGE })
           scheduleReconnect()
         }
       } catch {
@@ -179,7 +233,7 @@ export function createBridgeTransport(): BleTransport {
   return {
     id: 'bridge',
     label: 'Node bridge',
-    hint: 'Runs @stoprocent/noble locally. Start it with `pnpm dev:server`.',
+    hint: 'Runs @stoprocent/noble locally. Start it with `pnpm bridge`.',
 
     async probe() {
       const opened = await Promise.race([
@@ -202,32 +256,43 @@ export function createBridgeTransport(): BleTransport {
         setStatus({
           status: 'error',
           scanning: false,
-          message: 'Could not reach the Node bridge. Is `pnpm dev:server` running?',
+          message:
+            'Could not reach the Node bridge. Is `pnpm bridge` running, and is the bridge URL correct?',
         })
         return
       }
-      send({ type: 'start' })
+      maybeStart()
       setStatus({ status: 'searching', scanning: true })
     },
 
     async stop() {
       wantScanning = false
+      startRequested = false
       send({ type: 'stop' })
       setStatus({ status: 'idle', scanning: false })
+    },
+
+    async reconnect() {
+      clearReconnect()
+      if (connecting) {
+        try {
+          await connecting
+        } catch {
+          /* ignore — we are replacing the socket anyway */
+        }
+      }
+      teardownSocket()
+      authed = false
+      startRequested = false
+      const opened = await connect()
+      if (opened) maybeStart()
     },
 
     dispose() {
       disposed = true
       wantScanning = false
       clearReconnect()
-      if (socket) {
-        socket.onclose = null
-        socket.onerror = null
-        socket.onmessage = null
-        socket.onopen = null
-        socket.close()
-        socket = null
-      }
+      teardownSocket()
       statusEmitter.clear()
       beaconEmitter.clear()
     },

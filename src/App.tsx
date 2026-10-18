@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { BeaconList } from './components/BeaconList'
 import { BeaconToolbar } from './components/BeaconToolbar'
 import { BluetoothStatusBanner } from './components/BluetoothStatusBanner'
+import { BridgeSettings } from './components/BridgeSettings'
 import { EmptyState } from './components/EmptyState'
 import { TransportSwitch } from './components/TransportSwitch'
 import { useBeaconScanner } from './hooks/useBeaconScanner'
@@ -78,6 +79,13 @@ export default function App() {
           )}
         </button>
       </div>
+
+      {scanner.transportId === 'bridge' ? (
+        <BridgeSettings
+          available={scanner.availability.bridge}
+          onApply={scanner.reconnectBridge}
+        />
+      ) : null}
 
       <BeaconToolbar
         count={sorted.length}

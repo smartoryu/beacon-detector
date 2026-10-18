@@ -92,6 +92,8 @@ export interface BeaconScanner {
   start: () => void
   stop: () => void
   toggle: () => void
+  /** Reconnect the bridge after its URL/token settings changed. */
+  reconnectBridge: () => void
   removeBeacon: (key: string) => void
   clearAll: () => void
   /** `null` while the availability probe is still in flight. */
@@ -178,6 +180,14 @@ export function useBeaconScanner(): BeaconScanner {
     else void active.start()
   }, [registry, transportId])
 
+  const reconnectBridge = useCallback(() => {
+    const bridge = registry.bridge
+    void (bridge.reconnect?.() ?? Promise.resolve()).then(async () => {
+      const ok = await bridge.probe()
+      setAvailability((prev) => ({ ...prev, bridge: ok }))
+    })
+  }, [registry])
+
   const removeBeacon = useCallback((key: string) => {
     setBeacons((prev) => prev.filter((beacon) => beacon.key !== key))
   }, [])
@@ -193,6 +203,7 @@ export function useBeaconScanner(): BeaconScanner {
     start,
     stop,
     toggle,
+    reconnectBridge,
     removeBeacon,
     clearAll,
     availability,
