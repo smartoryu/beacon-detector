@@ -168,13 +168,25 @@ Why the bridge is not “deployed” to a cloud host: it needs a physical BLE ra
 beacons. Because a quick-tunnel URL changes on every restart, the app takes the bridge URL **and token at
 runtime** via the **Bridge settings** panel (persisted in `localStorage`), not at build time.
 
+Operators hand out a **connection-profile deep link** so recipients need no setup at all:
+
+```
+https://beacon-detector.pages.dev/#bridge=wss://calm-words.trycloudflare.com/ble-ws&token=<secret>
+```
+
+The profile lives in the URL **fragment**, which is never sent to Cloudflare, so the shared token stays out
+of access logs. On load the app stores it, selects the bridge transport, and clears the fragment.
+
 ---
 
 ## Known limitations
 
 - Web Bluetooth scanning is experimental and Chrome/Edge-only, and needs a visible tab.
 - `@stoprocent/noble` is a native module: Node ≥ 22 required (built and tested on Node 22).
-- A Cloudflare **quick tunnel** URL changes on every restart — re-paste it in **Bridge settings**.
+- A Cloudflare **quick tunnel** URL changes on every restart — share a fresh deep link (or re-paste it in
+  **Bridge settings**).
+- Anyone with a connection-profile link can scan through that bridge; treat the token as shareable-but-rotatable
+  and never commit it.
 - The bridge is internet-exposed when tunneled; set `BRIDGE_AUTH_TOKEN` and `BRIDGE_ALLOWED_ORIGINS`.
 - iBeacon advertisements are anonymous — the app cannot identify their owner.
 - Two different beacons with the same `uuid:major:minor` intentionally collapse into one row.

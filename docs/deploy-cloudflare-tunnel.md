@@ -39,6 +39,30 @@ Two modes:
 
 ---
 
+## A2. Sharing with other users (zero setup for them)
+
+Don't make people paste a URL and token. Build a **connection-profile deep link** and share that:
+
+```
+https://beacon-detector.pages.dev/#bridge=wss://calm-words-1234.trycloudflare.com/ble-ws&token=<BRIDGE_AUTH_TOKEN>
+```
+
+- [ ] Start the bridge + tunnel as in section A.
+- [ ] Assemble the link: the app origin, then `#bridge=<tunnel-url>&token=<token>`.
+- [ ] Send the link. On open the app saves the profile, switches to the **Node bridge** transport, connects
+      automatically, and clears the fragment from the address bar.
+- [ ] When the tunnel restarts (new hostname), regenerate and re-send the link.
+
+Notes:
+
+- The profile is in the **fragment** (`#`), not the query string, on purpose: browsers never send fragments to
+  the server, so the token does not land in Cloudflare access logs or `Referer` headers.
+- `bridge=` also accepts a bare host (`calm-words.trycloudflare.com`) or `http://localhost:8787`; it is
+  normalized to `wss://…/ble-ws`. `url=` works as an alias.
+- A recipient can still override anything in **Bridge settings** (advanced), and **Reset** clears the profile.
+
+---
+
 ## B. Upgrade to a named tunnel (when a domain exists)
 
 Only the tunnel command and DNS route change; the app already accepts any `wss://` URL.

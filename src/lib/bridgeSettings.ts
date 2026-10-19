@@ -6,6 +6,7 @@
  * pastes the tunnel URL (and token) into the UI; values persist in
  * `localStorage` and override any build-time defaults.
  */
+import { BRIDGE_SETTINGS_STORAGE_KEY, TRANSPORT_STORAGE_KEY } from './storageKeys'
 
 export interface BridgeSettings {
   /** Full ws(s):// URL, or empty to fall back to env / same-origin. */
@@ -13,8 +14,6 @@ export interface BridgeSettings {
   /** Shared token sent in the first `auth` frame. Empty when unused. */
   token: string
 }
-
-const STORAGE_KEY = 'beacon-detector:bridge-settings'
 
 const ENV_URL = (import.meta.env.VITE_BRIDGE_URL ?? '').trim()
 const ENV_TOKEN = (import.meta.env.VITE_BRIDGE_TOKEN ?? '').trim()
@@ -27,7 +26,7 @@ export const DEFAULT_BRIDGE_SETTINGS: BridgeSettings = {
 
 export function loadBridgeSettings(): BridgeSettings {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(BRIDGE_SETTINGS_STORAGE_KEY)
     if (!raw) return { ...DEFAULT_BRIDGE_SETTINGS }
 
     const parsed = JSON.parse(raw) as Partial<BridgeSettings>
@@ -43,7 +42,7 @@ export function loadBridgeSettings(): BridgeSettings {
 export function saveBridgeSettings(settings: BridgeSettings): void {
   try {
     localStorage.setItem(
-      STORAGE_KEY,
+      BRIDGE_SETTINGS_STORAGE_KEY,
       JSON.stringify({ url: settings.url.trim(), token: settings.token.trim() }),
     )
   } catch {
@@ -53,7 +52,7 @@ export function saveBridgeSettings(settings: BridgeSettings): void {
 
 export function resetBridgeSettings(): void {
   try {
-    localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(BRIDGE_SETTINGS_STORAGE_KEY)
   } catch {
     /* ignore */
   }
@@ -95,4 +94,55 @@ export function resolveBridgeUrl(settings: BridgeSettings = loadBridgeSettings()
 
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${protocol}//${location.host}/ble-ws`
+}
+
+/**
+ * Apply a shared connection-profile link, e.g.
+ *
+ *   https://app.pages.dev/#bridge=wss://calm-words.trycloudflare.com/ble-ws&token=SECRET
+ *
+ * The values live in the URL **fragment** on purpose: fragments are never sent
+ * to the server, so the shared token stays out of Cloudflare access logs. This
+ * also forces the bridge transport so a recipient lands on the right backend
+ * without touching any setting.
+ *
+ * Returns `true` when a profile was applied.
+ */
+export function applyBridgeDeepLink(href: string): boolean {
+  const hashIndex = href.indexOf('#')
+  if (hashIndex === -1) return false
+
+  const fragment = href.slice(hashIndex + 1)
+  if (!fragment) return false
+
+  const params = new URLSearchParams(fragment)
+  const rawUrl = params.get('bridge') ?? params.get('url') ?? ''
+  const rawToken = params.get('token') ?? ''
+  if (!rawUrl.trim() && !rawToken.trim()) return false
+
+  const current = loadBridgeSettings()
+  saveBridgeSettings({
+    url: (rawUrl || current.url).trim(),
+    token: (rawToken || current.token).trim(),
+  })
+
+  try {
+    localStorage.setItem(TRANSPORT_STORAGE_KEY, 'bridge')
+  } catch {
+    /* private mode */
+  }
+
+  return true
+}
+
+/**
+ * Drop the fragment after a deep link is applied, so the token is not left in
+ * the address bar, history entry or any screenshot.
+ */
+export function stripBridgeDeepLink(): void {
+  try {
+    history.replaceState(null, '', location.pathname + location.search)
+  } catch {
+    /* ignore */
+  }
 }

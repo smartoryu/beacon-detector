@@ -2,12 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { beaconKey, toHex } from '../lib/ibeacon'
 import { smoothRssi } from '../lib/rssi'
 import { loadBeacons, saveBeacons } from '../lib/store'
+import { TRANSPORT_STORAGE_KEY } from '../lib/storageKeys'
 import { createBridgeTransport } from '../lib/transports/bridge'
 import type { BleTransport, TransportStatus } from '../lib/transports/types'
 import { createWebBluetoothTransport } from '../lib/transports/webBluetooth'
 import type { Beacon, RawBeaconEvent, TransportId } from '../types'
-
-const TRANSPORT_STORAGE_KEY = 'beacon-detector:transport'
 
 /**
  * Transports are module singletons so React StrictMode's double-render and
